@@ -10,6 +10,7 @@ import pandas as pd
 import torch
 import torch.optim as optim
 import torch.multiprocessing
+from torch.nn import CrossEntropyLoss
 
 from .utils.config_parser import ConfigParser
 from .utils.plotter import plot_losses
@@ -42,12 +43,14 @@ class Trainer:
         self.writer = (
             self._init_tensorboard()
         )  # create `SummaryWriter` for tensorboard visualization
-        self.index, self.masks, self.weights, self.features, self.adj = self._preprocess_inputs()
+        self.index, self.masks, self.train_mask, self.test_mask, self.weights, self.features, self.encoded_labels, self.adj = self._preprocess_inputs()
         self.train_loaders = self._make_train_loaders()
+        self.test_loaders = self._make_test_loaders()
         self.inference_loaders = self._make_inference_loaders()
         self.model, self.optimizer = self._init_model()
 
     def _parse_config(self, config):
+        print(config)
         cp = ConfigParser(config)
         return cp.parse()
 
@@ -71,7 +74,19 @@ class Trainer:
                 sizes=[10] * self.params.gat_shapes["n_layers"],
                 batch_size=self.params.batch_size,
                 shuffle=False,
-                sampler=StatefulSampler(torch.arange(len(self.index))),
+                sampler=StatefulSampler(torch.arange(len(self.index[self.train_mask]))),
+            )
+            for ad in self.adj
+        ]
+
+    def _make_test_loaders(self):
+        return [
+            NeighborSamplerWithWeights(
+                ad,
+                sizes=[10] * self.params.gat_shapes["n_layers"],
+                batch_size=self.params.batch_size,
+                shuffle=False,
+                sampler=StatefulSampler(torch.arange(len(self.index[self.test_mask]))),
             )
             for ad in self.adj
         ]
@@ -93,6 +108,7 @@ class Trainer:
             len(self.index),
             self.params.gat_shapes,
             self.params.embedding_size,
+            len(set(self.encoded_labels)),
             len(self.adj),
             svd_dim=self.params.svd_dim,
         )
@@ -152,12 +168,14 @@ class Trainer:
                     rand_net_idxs, math.floor(len(self.adj) / self.params.sample_size)
                 )
                 for rand_idxs in idx_split:
-                    _, losses = self._train_step(rand_idxs)
+                    train_output, losses, acc = self._train_step(rand_idxs)
+                    test_output, val_losses, val_acc = self._test_step(rand_idxs)
                     for idx, loss in zip(rand_idxs, losses):
                         epoch_losses[idx] += loss
 
             else:
-                _, losses = self._train_step()
+                train_output, losses, acc = self._train_step()
+                test_output, val_losses, val_acc = self._test_step()
 
                 epoch_losses = [
                     ep_loss + b_loss.item() / (len(self.index) / self.params.batch_size)
@@ -165,7 +183,7 @@ class Trainer:
                 ]
 
             if verbosity:
-                progress_string = self._create_progress_string(epoch, epoch_losses, time_start)
+                progress_string = self._create_progress_string(epoch, epoch_losses, acc, val_acc, time_start)
                 typer.echo(progress_string)
 
             # Add loss data to tensorboard visualization
@@ -201,69 +219,177 @@ class Trainer:
         """
 
         # Get random integers for batch.
-        rand_int = StatefulSampler.step(len(self.index))
+        rand_int = StatefulSampler.step(len(self.index[self.train_mask]))
         int_splits = torch.split(rand_int, self.params.batch_size)
         batch_features = self.features
+        batch_labels = self.encoded_labels[self.train_mask]
+        union_train_mask = self.masks[self.train_mask,:]
 
         # Initialize loaders to current batch.
         if bool(self.params.sample_size):
-            batch_loaders = [self.train_loaders[i] for i in rand_net_idx]
+            batch_train_loaders = [self.train_loaders[i] for i in rand_net_idx]
             if isinstance(self.features, list):
                 batch_features = [self.features[i] for i in rand_net_idx]
 
             # Subset `masks` tensor.
-            mask_splits = torch.split(self.masks[:, rand_net_idx][rand_int], self.params.batch_size)
+            mask_splits = torch.split(union_train_mask[:, rand_net_idx][rand_int], self.params.batch_size)
+            label_splits = torch.split(self.encoded_labels[self.train_mask][:, rand_net_idx][rand_int], self.params.batch_size)
 
         else:
-            batch_loaders = self.train_loaders
-            mask_splits = torch.split(self.masks[rand_int], self.params.batch_size)
+            batch_train_loaders = self.train_loaders
+            mask_splits = torch.split(union_train_mask[rand_int], self.params.batch_size)
+            label_splits = torch.split(self.encoded_labels[self.train_mask][rand_int], self.params.batch_size)
+
             if isinstance(self.features, list):
                 batch_features = self.features
 
         # List of losses.
-        losses = [0.0 for _ in range(len(batch_loaders))]
+        losses = [0.0 for _ in range(len(batch_train_loaders))]
 
         # Get the data flow for each input, stored in a tuple.
-        for batch_masks, node_ids, *data_flows in zip(mask_splits, int_splits, *batch_loaders):
+        for batch_masks, batch_labels, node_ids, *data_flows in zip(mask_splits, label_splits, int_splits, *batch_train_loaders):
 
             self.optimizer.zero_grad()
+            cross_entropy_loss = CrossEntropyLoss()
             if bool(self.params.sample_size):
                 training_datasets = [self.adj[i] for i in rand_net_idx]
-                output, _, _, _ = self.model(
+                output_adj, _, _, _, output, target = self.model(
                     training_datasets,
                     data_flows,
                     batch_features,
+                    batch_labels,
                     batch_masks,
                     rand_net_idxs=rand_net_idx,
                 )
-                curr_losses = [
+                curr_ce_losses = [
+                    cross_entropy_loss(
+                          output, target.long().to(Device())
+                    )
+                    for j, i in enumerate(rand_net_idx)
+                ]
+                curr_mse_losses = [
                     masked_scaled_mse(
-                        output, self.adj[i], self.weights[i], node_ids, batch_masks[:, j]
+                        output_adj, self.adj[i], self.weights[i], node_ids, batch_masks[:, i]
+                    )
+                    for i in range(len(self.adj))
+                ]
+            else:
+                training_datasets = self.adj
+                output_adj, _, _, _, output, target = self.model(
+                    training_datasets, data_flows, batch_features, batch_labels, batch_masks
+                )
+                curr_ce_losses = [
+                    cross_entropy_loss(
+                          output, target.long().to(Device())
+                    )
+                    for i in range(len(self.adj))
+                ]
+                curr_mse_losses = [
+                    masked_scaled_mse(
+                        output_adj, self.adj[i], self.weights[i], node_ids, batch_masks[:, i]
+                    )
+                    for i in range(len(self.adj))
+                ]
+
+            losses = [loss + curr_ce_loss + curr_mse_loss for loss, curr_ce_loss, curr_mse_loss in zip(losses, curr_ce_losses, curr_mse_losses)]
+            loss_sum = sum(curr_ce_losses) + sum(curr_mse_losses)
+            loss_sum.backward()
+            max_scores, max_idx_class = output.max(dim=1)
+            acc = (max_idx_class == target).sum().item() / target.size(0)
+
+            self.optimizer.step()
+
+        return max_idx_class, losses, acc
+
+    def _test_step(self, rand_net_idx=None):
+        """Defines training behaviour.
+        """
+
+        # Get random integers for batch.
+        rand_int = StatefulSampler.step(len(self.index[self.test_mask]))
+        int_splits = torch.split(rand_int, self.params.batch_size)
+        batch_features = self.features
+        batch_labels = self.encoded_labels[self.test_mask]
+        union_test_mask = self.masks[self.test_mask,:]
+
+        # Initialize loaders to current batch.
+        if bool(self.params.sample_size):
+            batch_test_loaders = [self.test_loaders[i] for i in rand_net_idx]
+            if isinstance(self.features, list):
+                batch_features = [self.features[i] for i in rand_net_idx]
+
+            # Subset `masks` tensor.
+            mask_splits = torch.split(union_test_mask[:, rand_net_idx][rand_int], self.params.batch_size)
+            label_splits = torch.split(self.encoded_labels[self.test_mask][rand_int], self.params.batch_size)
+
+        else:
+            batch_test_loaders = self.test_loaders
+            mask_splits = torch.split(union_test_mask[rand_int], self.params.batch_size)
+            label_splits = torch.split(self.encoded_labels[self.test_mask][rand_int], self.params.batch_size)
+
+            if isinstance(self.features, list):
+                batch_features = self.features
+
+        # List of losses.
+        losses = [0.0 for _ in range(len(batch_test_loaders))]
+
+        # Get the data flow for each input, stored in a tuple.
+        for batch_masks, batch_labels, node_ids, *data_flows in zip(mask_splits, label_splits, int_splits, *batch_test_loaders):
+
+            self.optimizer.zero_grad()
+            cross_entropy_loss = CrossEntropyLoss()
+            if bool(self.params.sample_size):
+                training_datasets = [self.adj[i] for i in rand_net_idx]
+                output_adj, _, _, _, output, target = self.model(
+                    training_datasets,
+                    data_flows,
+                    batch_features,
+                    batch_labels,
+                    batch_masks,
+                    rand_net_idxs=rand_net_idx,
+                )
+                curr_ce_losses = [
+                    cross_entropy_loss(
+                          output, target.long().to(Device())
+                    )
+                    for j, i in enumerate(rand_net_idx)
+                ]
+                curr_mse_losses = [
+                    masked_scaled_mse(
+                        output_adj, self.adj[i], self.weights[i], node_ids, batch_masks[:, j]
                     )
                     for j, i in enumerate(rand_net_idx)
                 ]
             else:
                 training_datasets = self.adj
-                output, _, _, _ = self.model(
-                    training_datasets, data_flows, batch_features, batch_masks
+                output_adj, _, _, _, output, target = self.model(
+                    training_datasets, data_flows, batch_features, batch_labels, batch_masks
                 )
-                curr_losses = [
+                curr_ce_losses = [
+                    cross_entropy_loss(
+                          output, target.long().to(Device())
+                    )
+                    for i in range(len(self.adj))
+                ]
+                curr_mse_losses = [
                     masked_scaled_mse(
-                        output, self.adj[i], self.weights[i], node_ids, batch_masks[:, i]
+                        output_adj, self.adj[i], self.weights[i], node_ids, batch_masks[:, i]
                     )
                     for i in range(len(self.adj))
                 ]
 
-            losses = [loss + curr_loss for loss, curr_loss in zip(losses, curr_losses)]
-            loss_sum = sum(curr_losses)
+            losses = [loss + curr_ce_loss + curr_mse_loss for loss, curr_ce_loss, curr_mse_loss in zip(losses, curr_ce_losses, curr_mse_losses)]
+            loss_sum = sum(curr_ce_losses) + sum(curr_mse_losses)
             loss_sum.backward()
+            max_scores, max_idx_class = output.max(dim=1)
+            acc = (max_idx_class == target).sum().item() / target.size(0)
 
             self.optimizer.step()
 
-        return output, losses
+        return max_idx_class, losses, acc
 
     def _create_progress_string(
-        self, epoch: int, epoch_losses: List[float], time_start: float
+        self, epoch: int, epoch_losses: List[float], acc: float, val_acc: float, time_start: float
     ) -> str:
         """Creates a training progress string to display.
         """
@@ -271,6 +397,8 @@ class Trainer:
 
         progress_string = (
             f"{cyan('Epoch')}: {epoch + 1} {sep} "
+            f"{cyan('Train Acc')}: {acc:.6f} {sep} "
+            f"{cyan('Val Acc')}: {val_acc:.6f} {sep} "
             f"{cyan('Loss Total')}: {sum(epoch_losses):.6f} {sep} "
         )
         if len(self.adj) <= 10:
@@ -313,13 +441,12 @@ class Trainer:
             for mask, idx, *data_flows in progress:
                 mask = mask.reshape((1, -1))
                 dot, emb, _, learned_scales = self.model(
-                    self.adj, data_flows, self.features, mask, evaluate=True
+                    self.adj, data_flows, self.features, self.encoded_labels, mask, evaluate=True
                 )
                 emb_list.append(emb.detach().cpu().numpy())
         emb = np.concatenate(emb_list)
         emb_df = pd.DataFrame(emb, index=self.index)
         emb_df.to_csv(extend_path(self.params.out_name, "_features.tsv"), sep="\t")
-        # emb_df.to_csv(extend_path(self.params.out_name, "_features.csv"))
 
         # Free memory (necessary for sequential runs)
         if Device() == "cuda":

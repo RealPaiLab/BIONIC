@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.sparse import data
 
 import torch
 import torch.nn as nn
@@ -19,6 +20,7 @@ class Bionic(nn.Module):
         in_size: int,
         gat_shapes: Dict[str, int],
         emb_size: int,
+        num_classes: int,
         n_modalities: int,
         alpha: float = 0.1,
         svd_dim: int = 0,
@@ -39,6 +41,7 @@ class Bionic(nn.Module):
 
         self.in_size = in_size
         self.emb_size = emb_size
+        self.num_classes = num_classes
         self.alpha = alpha
         self.n_modalities = n_modalities
         self.svd_dim = svd_dim
@@ -78,12 +81,14 @@ class Bionic(nn.Module):
 
         # Embedding.
         self.emb = nn.Linear(self.integration_size, emb_size)
+        self.output_prediction = nn.Linear(emb_size, num_classes)
 
     def forward(
         self,
         datasets: List[SparseTensor],
         data_flows: List[Tuple[int, Tensor, List[Adj]]],
         features: Tensor,
+        encoded_labels: Tensor,
         masks: Tensor,
         evaluate: Optional[bool] = False,
         rand_net_idxs: Optional[np.ndarray] = None,
@@ -123,6 +128,9 @@ class Bionic(nn.Module):
         x_store_modality = torch.zeros(
             (batch_size, self.integration_size), device=Device()
         )  # Tensor to store results from each modality.
+        y_store_modality = torch.zeros(
+            (batch_size), device=Device()
+        )  # Tensor to store results from each modality.
 
         # Iterate over input networks
         for i, data_flow in enumerate(data_flows):
@@ -142,29 +150,28 @@ class Bionic(nn.Module):
                 if j == 0:
                     if bool(self.svd_dim):
                         x = features[n_id].float()
-
                     else:
                         x = torch.zeros(len(n_id), self.in_size, device=Device())
                         x[np.arange(len(n_id)), n_id] = 1.0
-
                     x = self.pre_gat_layers[net_idx](x)
 
                 if j != 0:
                     x_store_layer = [x_s[: size[1]] for x_s in x_store_layer]
                     x_pre = x[: size[1]]
                     x_store_layer.append(x_pre)
-
                 x = self.gat_layers[net_idx]((x, None), edge_index, size, edge_weights=weights)
                 x_store_layer.append(x)
 
             x = sum(x_store_layer) + x  # Compute tensor with residuals
             x = scales[:, i] * interp_masks[:, i].reshape((-1, 1)) * x
             x_store_modality += x
+            y_store_modality += encoded_labels
+            
 
         # Embedding
         emb = self.emb(x_store_modality)
-
+        output_prediction = self.output_prediction(emb)
         # Dot product.
         dot = torch.mm(emb, torch.t(emb))
 
-        return dot, emb, out_pre_cat_layers, scales
+        return dot, emb, out_pre_cat_layers, scales, output_prediction, y_store_modality
