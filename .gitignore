@@ -3,6 +3,9 @@ torch-geometric/
 __pycache__/
 bionic/utils/__pycache__/
 bionic/outputs/*
+bionic/.DS_Store
+bionic/config/.DS_Store
+.DS_Store
 dist/
 bionic.egg-info/
 
