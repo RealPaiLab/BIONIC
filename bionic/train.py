@@ -43,7 +43,7 @@ class Trainer:
         self.writer = (
             self._init_tensorboard()
         )  # create `SummaryWriter` for tensorboard visualization
-        self.index, self.masks, self.train_mask, self.test_mask, self.weights, self.features, self.encoded_labels, self.adj = self._preprocess_inputs()
+        self.index, self.masks, self.train_mask, self.test_mask, self.weights, self.features, self.encoded_labels, self.label_encoder, self.adj = self._preprocess_inputs()
         self.train_loaders = self._make_train_loaders()
         self.test_loaders = self._make_test_loaders()
         self.inference_loaders = self._make_inference_loaders()
@@ -80,11 +80,12 @@ class Trainer:
         ]
 
     def _make_test_loaders(self):
+        test_size = len(self.index[self.test_mask])
         return [
             NeighborSamplerWithWeights(
                 ad,
                 sizes=[10] * self.params.gat_shapes["n_layers"],
-                batch_size=self.params.batch_size,
+                batch_size=test_size,
                 shuffle=False,
                 sampler=StatefulSampler(torch.arange(len(self.index[self.test_mask]))),
             )
@@ -108,10 +109,11 @@ class Trainer:
             len(self.index),
             self.params.gat_shapes,
             self.params.embedding_size,
-            len(set(self.encoded_labels)),
+            len(self.encoded_labels.unique()),
             len(self.adj),
             svd_dim=self.params.svd_dim,
         )
+        print(f'num of class:{len(self.encoded_labels.unique())}')
         model.apply(self._init_model_weights)
 
         # Load pretrained model
@@ -129,15 +131,16 @@ class Trainer:
 
     def _init_model_weights(self, model):
         if hasattr(model, "weight"):
-            if self.params.initialization == "kaiming":
-                torch.nn.init.kaiming_uniform_(model.weight, a=0.1)
-            elif self.params.initialization == "xavier":
-                torch.nn.init.xavier_uniform_(model.weight)
-            else:
-                raise ValueError(
-                    f"The initialization scheme {self.params.initialization} \
-                    provided is not supported"
-                )
+            if type(model) == torch.nn.Linear:
+                if self.params.initialization == "kaiming":
+                    torch.nn.init.kaiming_uniform_(model.weight, a=0.1)
+                elif self.params.initialization == "xavier":
+                    torch.nn.init.xavier_uniform_(model.weight, gain=1)
+                else:
+                    raise ValueError(
+                        f"The initialization scheme {self.params.initialization} \
+                        provided is not supported"
+                    )
 
     def train(self, verbosity: Optional[int] = 1):
         """Trains BIONIC model.
@@ -150,8 +153,10 @@ class Trainer:
 
         # Track losses per epoch.
         train_loss = []
+        val_acc_lst = []
 
         best_loss = None
+        best_acc = None
         best_state = None
 
         # Train model.
@@ -197,22 +202,29 @@ class Trainer:
                     self.writer.add_scalar("Total Reconstruction Error", sum(epoch_losses), epoch)
 
             train_loss.append(epoch_losses)
+            val_acc_lst.append(val_acc)
 
             # Store best parameter set
-            if not best_loss or sum(epoch_losses) < best_loss:
+            # if not best_loss or sum(epoch_losses) < best_loss:
+            if not best_acc or sum(val_acc_lst) > best_acc:
                 best_loss = sum(epoch_losses)
+                best_acc = sum(val_acc_lst)
+                print(val_acc_lst)
                 state = {
                     "epoch": epoch + 1,
                     "state_dict": self.model.state_dict(),
                     "best_loss": best_loss,
+                    "best_acc": best_acc,
                 }
                 best_state = state
-                # torch.save(state, f'checkpoints/{self.params.out_name}_model.pt')
+                
+                torch.save(state, f'checkpoints/{self.params.out_name}_model.pt')
 
         if self.params.use_tensorboard:
             self.writer.close()
 
         self.train_loss, self.best_state = train_loss, best_state
+        # print(self.best_state)
 
     def _train_step(self, rand_net_idx=None):
         """Defines training behaviour.
@@ -253,7 +265,7 @@ class Trainer:
             cross_entropy_loss = CrossEntropyLoss()
             if bool(self.params.sample_size):
                 training_datasets = [self.adj[i] for i in rand_net_idx]
-                output_adj, _, _, _, output, target = self.model(
+                output_adj, _, _, _, output = self.model(
                     training_datasets,
                     data_flows,
                     batch_features,
@@ -263,7 +275,7 @@ class Trainer:
                 )
                 curr_ce_losses = [
                     cross_entropy_loss(
-                          output, target.long().to(Device())
+                          output, batch_labels.long().to(Device())
                     )
                     for j, i in enumerate(rand_net_idx)
                 ]
@@ -275,12 +287,12 @@ class Trainer:
                 ]
             else:
                 training_datasets = self.adj
-                output_adj, _, _, _, output, target = self.model(
+                output_adj, _, _, _, output = self.model(
                     training_datasets, data_flows, batch_features, batch_labels, batch_masks
                 )
                 curr_ce_losses = [
                     cross_entropy_loss(
-                          output, target.long().to(Device())
+                          output, batch_labels.long().to(Device())
                     )
                     for i in range(len(self.adj))
                 ]
@@ -294,8 +306,9 @@ class Trainer:
             losses = [loss + curr_ce_loss + curr_mse_loss for loss, curr_ce_loss, curr_mse_loss in zip(losses, curr_ce_losses, curr_mse_losses)]
             loss_sum = sum(curr_ce_losses) + sum(curr_mse_losses)
             loss_sum.backward()
-            max_scores, max_idx_class = output.max(dim=1)
-            acc = (max_idx_class == target).sum().item() / target.size(0)
+            softmax = torch.nn.Softmax(dim=1)
+            max_scores, max_idx_class = softmax(output).max(dim=1)
+            acc = (max_idx_class == batch_labels).sum().item() / batch_labels.size(0)
 
             self.optimizer.step()
 
@@ -306,8 +319,9 @@ class Trainer:
         """
 
         # Get random integers for batch.
-        rand_int = StatefulSampler.step(len(self.index[self.test_mask]))
-        int_splits = torch.split(rand_int, self.params.batch_size)
+        test_size = len(self.index[self.test_mask])
+        rand_int = StatefulSampler.step(test_size)
+        int_splits = torch.split(rand_int, test_size)
         batch_features = self.features
         batch_labels = self.encoded_labels[self.test_mask]
         union_test_mask = self.masks[self.test_mask,:]
@@ -319,13 +333,13 @@ class Trainer:
                 batch_features = [self.features[i] for i in rand_net_idx]
 
             # Subset `masks` tensor.
-            mask_splits = torch.split(union_test_mask[:, rand_net_idx][rand_int], self.params.batch_size)
-            label_splits = torch.split(self.encoded_labels[self.test_mask][rand_int], self.params.batch_size)
+            mask_splits = torch.split(union_test_mask[:, rand_net_idx][rand_int], test_size)
+            label_splits = torch.split(self.encoded_labels[self.test_mask][rand_int], test_size)
 
         else:
             batch_test_loaders = self.test_loaders
-            mask_splits = torch.split(union_test_mask[rand_int], self.params.batch_size)
-            label_splits = torch.split(self.encoded_labels[self.test_mask][rand_int], self.params.batch_size)
+            mask_splits = torch.split(union_test_mask[rand_int], test_size)
+            label_splits = torch.split(self.encoded_labels[self.test_mask][rand_int], test_size)
 
             if isinstance(self.features, list):
                 batch_features = self.features
@@ -340,7 +354,7 @@ class Trainer:
             cross_entropy_loss = CrossEntropyLoss()
             if bool(self.params.sample_size):
                 training_datasets = [self.adj[i] for i in rand_net_idx]
-                output_adj, _, _, _, output, target = self.model(
+                output_adj, _, _, _, output = self.model(
                     training_datasets,
                     data_flows,
                     batch_features,
@@ -350,7 +364,7 @@ class Trainer:
                 )
                 curr_ce_losses = [
                     cross_entropy_loss(
-                          output, target.long().to(Device())
+                          output, batch_labels.long().to(Device())
                     )
                     for j, i in enumerate(rand_net_idx)
                 ]
@@ -362,12 +376,12 @@ class Trainer:
                 ]
             else:
                 training_datasets = self.adj
-                output_adj, _, _, _, output, target = self.model(
+                output_adj, _, _, _, output = self.model(
                     training_datasets, data_flows, batch_features, batch_labels, batch_masks
                 )
                 curr_ce_losses = [
                     cross_entropy_loss(
-                          output, target.long().to(Device())
+                          output, batch_labels.long().to(Device())
                     )
                     for i in range(len(self.adj))
                 ]
@@ -381,8 +395,11 @@ class Trainer:
             losses = [loss + curr_ce_loss + curr_mse_loss for loss, curr_ce_loss, curr_mse_loss in zip(losses, curr_ce_losses, curr_mse_losses)]
             loss_sum = sum(curr_ce_losses) + sum(curr_mse_losses)
             loss_sum.backward()
-            max_scores, max_idx_class = output.max(dim=1)
-            acc = (max_idx_class == target).sum().item() / target.size(0)
+            softmax = torch.nn.Softmax(dim=1)
+            max_scores, max_idx_class = softmax(output).max(dim=1)
+            # print(max_idx_class)
+            # print(max_scores)
+            acc = (max_idx_class == batch_labels).sum().item() / batch_labels.size(0)
 
             self.optimizer.step()
 
@@ -430,6 +447,8 @@ class Trainer:
         self.model.eval()
         StatefulSampler.step(len(self.index), random=False)
         emb_list = []
+        conf_list = []
+        pred_list = []
 
         # Build embedding one node at a time
         # TODO: add verbosity control
@@ -438,15 +457,43 @@ class Trainer:
             label=f"{cyan('Forward Pass')}:",
             length=len(self.index),
         ) as progress:
-            for mask, idx, *data_flows in progress:
+            for i, (mask, idx, *data_flows) in enumerate(progress):
                 mask = mask.reshape((1, -1))
-                dot, emb, _, learned_scales = self.model(
-                    self.adj, data_flows, self.features, self.encoded_labels, mask, evaluate=True
+                dot, emb, _, learned_scales, pred  = self.model(
+                    self.adj, data_flows, self.features, self.encoded_labels[i], mask, evaluate=True
                 )
-                emb_list.append(emb.detach().cpu().numpy())
-        emb = np.concatenate(emb_list)
-        emb_df = pd.DataFrame(emb, index=self.index)
-        emb_df.to_csv(extend_path(self.params.out_name, "_features.tsv"), sep="\t")
+                softmax = torch.nn.Softmax(dim=1)
+                max_scores, max_idx_class = softmax(pred).max(dim=1)
+                emb_list.append(emb.detach().cpu().numpy().astype(np.float16))
+                conf_list.append(max_scores.detach().cpu().numpy().astype(np.float16)[0])
+                pred_list.append(max_idx_class.detach().cpu().numpy().astype(np.uint8)[0])
+
+        emb_features = np.concatenate(emb_list)
+        train_emb = emb_features[self.train_mask, :]
+        train_emb_df = pd.DataFrame(train_emb, index=self.index[self.train_mask])
+        train_emb_df.to_csv(extend_path(self.params.out_name, "_train_features.tsv"), sep="\t")
+        test_emb = emb_features[self.test_mask, :]
+        test_emb_df = pd.DataFrame(test_emb, index=self.index[self.test_mask])
+        test_emb_df.to_csv(extend_path(self.params.out_name, "_test_features.tsv"), sep="\t")
+
+        conf = np.array(conf_list)
+        pred = np.array(pred_list)
+        target = self.label_encoder.inverse_transform(self.encoded_labels)
+        pred = self.label_encoder.inverse_transform(pred)
+        train_target = target[self.train_mask]
+        test_target = target[self.test_mask]
+        train_conf = conf[self.train_mask]
+        test_conf = conf[self.test_mask]
+        train_pred = pred[self.train_mask]
+        test_pred = pred[self.test_mask]
+        train_result_df = pd.DataFrame({'target': train_target,
+                                        'prediction': train_pred,
+                                        'confidence': train_conf}, index=self.index[self.train_mask])
+        test_result_df = pd.DataFrame({'target': test_target,
+                                        'prediction': test_pred,
+                                        'confidence': test_conf}, index=self.index[self.test_mask])
+        train_result_df.to_csv(extend_path(self.params.out_name, "_train_results.tsv"), sep="\t")
+        test_result_df.to_csv(extend_path(self.params.out_name, "_test_results.tsv"), sep="\t")
 
         # Free memory (necessary for sequential runs)
         if Device() == "cuda":

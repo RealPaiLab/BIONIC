@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from torch_sparse import SparseTensor
+import torch.nn.functional as F
 
 from ..utils.sampler import Adj
 from ..utils.common import Device
@@ -12,6 +13,8 @@ from ..utils.common import Device
 from typing import Dict, List, Tuple, Optional
 
 from .layers import WGATConv, Interp
+
+from sklearn.preprocessing import StandardScaler
 
 
 class Bionic(nn.Module):
@@ -80,8 +83,12 @@ class Bionic(nn.Module):
         self.interp = Interp(self.n_modalities)
 
         # Embedding.
+        self.bn1 = nn.BatchNorm1d(self.integration_size)
         self.emb = nn.Linear(self.integration_size, emb_size)
-        self.output_prediction = nn.Linear(emb_size, num_classes)
+        self.bn2 = nn.BatchNorm1d(emb_size)
+        self.fc = nn.Linear(emb_size, 64)
+        self.bn3 = nn.BatchNorm1d(64)
+        self.output_prediction = nn.Linear(64, num_classes)
 
     def forward(
         self,
@@ -128,9 +135,6 @@ class Bionic(nn.Module):
         x_store_modality = torch.zeros(
             (batch_size, self.integration_size), device=Device()
         )  # Tensor to store results from each modality.
-        y_store_modality = torch.zeros(
-            (batch_size), device=Device()
-        )  # Tensor to store results from each modality.
 
         # Iterate over input networks
         for i, data_flow in enumerate(data_flows):
@@ -165,13 +169,23 @@ class Bionic(nn.Module):
             x = sum(x_store_layer) + x  # Compute tensor with residuals
             x = scales[:, i] * interp_masks[:, i].reshape((-1, 1)) * x
             x_store_modality += x
-            y_store_modality += encoded_labels
             
 
         # Embedding
         emb = self.emb(x_store_modality)
-        output_prediction = self.output_prediction(emb)
+        # means = x_store_modality.mean(dim=1, keepdim=True)
+        # stds = x_store_modality.std(dim=1, keepdim=True)
+        # emb_normalized = (x_store_modality - means) / stds
+        # emb_normalized = StandardScaler().fit_transform(x_store_modality.detach().numpy())
+        emb_normalized = self.bn1(x_store_modality)
+        # emb_normalized = self.emb(torch.from_numpy(emb_normalized))
+        # scaled_emb = StandardScaler().fit_transform(emb)
+        emb_normalized = self.bn2(emb)
+        emb_normalized = F.relu(self.fc(emb_normalized))
+        emb_normalized = self.bn3(emb_normalized)
+        
+        output_prediction = F.relu(self.output_prediction(emb_normalized))
         # Dot product.
         dot = torch.mm(emb, torch.t(emb))
 
-        return dot, emb, out_pre_cat_layers, scales, output_prediction, y_store_modality
+        return dot, emb, out_pre_cat_layers, scales, output_prediction

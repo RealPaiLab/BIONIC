@@ -22,14 +22,13 @@ def train(config_path: Path):
     time_start = time.time()
     trainer = Trainer(config_path)
     trainer.train()
-    trainer.test()
     trainer.forward()
     time_end = time.time()
     print(create_time_taken_string(time_start, time_end))
 
 
 def main():
-    train(Path('/Users/jyu/Documents/BIONIC/bionic/config/patient_similarity.json'))
+    train(Path('/Users/jyu/Documents/jenny_bionic/BIONIC/bionic/config/patient_similarity.json'))
 
 if __name__ == '__main__':
     main()

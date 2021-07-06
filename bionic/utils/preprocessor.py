@@ -55,6 +55,10 @@ class Preprocessor:
     def _get_union(self):
 
         union = reduce(np.union1d, [G.nodes() for G in self.graphs])
+        if isinstance(union, np.ndarray):
+            pass
+        else:
+            union = np.array(union)
         return union
 
     def _create_masks(self):
@@ -111,11 +115,18 @@ class Preprocessor:
 
         pheno_data = pd.read_csv("/Users/jyu/Documents/DL_classifier/data/raw/pheno.txt", sep='\t', index_col='patientID', low_memory=False)
         for G in self.graphs:
-            labels =[pheno_data.loc[n.replace('.','-')]['PAM50.mRNA'] for n in G.nodes()]
+            labels = []
+            for n in G.nodes():
+                pat_name = n.replace('.','-')
+                label = pheno_data.loc[pat_name]['PAM50.mRNA']
+                if label == 'Normal-like' or pd.isna(label): 
+                    pheno_data = pheno_data.drop([pat_name])
+                else: 
+                    labels.append(label)
             le = preprocessing.LabelEncoder()
             le.fit(labels)
-            encoded_labels = torch.IntTensor(le.transform(labels))
-        return encoded_labels
+            encoded_labels = torch.IntTensor(le.transform(labels)).type(torch.uint8)
+        return encoded_labels, le
 
     def _create_pyg_graphs(self):
 
@@ -154,7 +165,7 @@ class Preprocessor:
         train_mask, test_mask = self._create_train_validation_masks()
         weights: Tensor = self._create_weights()
         features: Tensor = self._create_features()
-        encoded_labels: Tensor = self._create_labels()
+        encoded_labels, label_encoder = self._create_labels()
         pyg_graphs: List[SparseTensor] = self._create_pyg_graphs()
 
         masks = masks.to(Device())
@@ -170,4 +181,4 @@ class Preprocessor:
         pyg_graphs = [t.to(Device()) for t in pyg_graphs]
 
         typer.echo(f"Preprocessing finished: {magenta(f'{len(self.union)}')} total nodes.")
-        return self.union, masks, train_mask, test_mask, weights, features, encoded_labels, pyg_graphs
+        return self.union, masks, train_mask, test_mask, weights, features, encoded_labels, label_encoder, pyg_graphs
