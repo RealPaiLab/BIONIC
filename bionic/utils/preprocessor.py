@@ -114,9 +114,11 @@ class Preprocessor:
     def _create_labels(self):
 
         pheno_data = pd.read_csv("/Users/jyu/Documents/DL_classifier/data/raw/pheno.txt", sep='\t', index_col='patientID', low_memory=False)
+        lst = []
         for G in self.graphs:
             labels = []
             for n in G.nodes():
+                lst.append(n)
                 pat_name = n.replace('.','-')
                 label = pheno_data.loc[pat_name]['PAM50.mRNA']
                 if label == 'Normal-like' or pd.isna(label): 

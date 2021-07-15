@@ -1,18 +1,17 @@
 {
   "names": [
-    "bionic/inputs/methylation_similarity.txt",
     "bionic/inputs/mrna_similarity.txt"
   ],
-  "out_name": "bionic/outputs/patient_similarity",
-  "epochs": 10000,
-  "batch_size": 64,
-  "learning_rate": 0.0005,
+  "out_name": "bionic/outputs/fixed_patient_similarity_mrna_only_ce_loss_only",
+  "epochs": 500,
+  "batch_size": 512,
+  "learning_rate": 0.0001,
   "gat_shapes": {
     "dimension": 64,
     "n_heads": 10,
     "n_layers": 2
   },
-  "embedding_size": 512,
+  "embedding_size": 128,
   "save_model": true,
   "save_network_scales": true
 }
