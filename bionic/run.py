@@ -28,7 +28,7 @@ def train(config_path: Path):
 
 
 def main():
-    train(Path('/Users/jyu/Documents/jenny_bionic/BIONIC/bionic/config/patient_similarity.json'))
+    train(Path('/Users/jyu/Documents/jenny_bionic_new/BIONIC/bionic/config/patient_similarity.json'))
 
 if __name__ == '__main__':
     main()

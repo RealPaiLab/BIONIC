@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.sparse import data
 
 import torch
 import torch.nn as nn
@@ -13,9 +12,7 @@ from ..utils.common import Device
 from typing import Dict, List, Tuple, Optional
 
 from .layers import WGATConv, Interp
-
 from sklearn.preprocessing import StandardScaler
-# torch.set_printoptions(profile="full")
 
 
 
@@ -25,7 +22,6 @@ class Bionic(nn.Module):
         in_size: int,
         gat_shapes: Dict[str, int],
         emb_size: int,
-        num_classes: int,
         n_modalities: int,
         alpha: float = 0.1,
         svd_dim: int = 0,
@@ -46,7 +42,6 @@ class Bionic(nn.Module):
 
         self.in_size = in_size
         self.emb_size = emb_size
-        self.num_classes = num_classes
         self.alpha = alpha
         self.n_modalities = n_modalities
         self.svd_dim = svd_dim
@@ -85,19 +80,18 @@ class Bionic(nn.Module):
         self.interp = Interp(self.n_modalities)
 
         # Embedding.
-        # self.bn1 = nn.BatchNorm1d(self.integration_size)
         self.emb = nn.Linear(self.integration_size, emb_size)
+
+        #CHANGE ADDED, add batch normalization layer, hidden fully connected layer and output layer
         # self.bn2 = nn.BatchNorm1d(emb_size)
-        # self.fc = nn.Linear(emb_size, 64)
-        # self.bn3 = nn.BatchNorm1d(64)
-        self.output_prediction = nn.Linear(emb_size, num_classes)
+        self.fc = nn.Linear(emb_size, 256)
+        self.output_prediction = nn.Linear(256, 4)
 
     def forward(
         self,
         datasets: List[SparseTensor],
         data_flows: List[Tuple[int, Tensor, List[Adj]]],
         features: Tensor,
-        encoded_labels: Tensor,
         masks: Tensor,
         evaluate: Optional[bool] = False,
         rand_net_idxs: Optional[np.ndarray] = None,
@@ -153,57 +147,43 @@ class Bionic(nn.Module):
             for j, (edge_index, e_id, weights, size) in enumerate(adjs):
 
                 # Initial `x` is feature matrix
-                # print('---------------------------------------')
-                # print(f'edge_index: {edge_index}')
-                # print(f'e_id: {e_id}')
-                # print(f'weights: {weights}')
-                # print(f'size: {size}')
-                
                 if j == 0:
                     if bool(self.svd_dim):
                         x = features[n_id].float()
+
                     else:
                         x = torch.zeros(len(n_id), self.in_size, device=Device())
                         x[np.arange(len(n_id)), n_id] = 1.0
-                        # print(f'x raw: {x}')
-                        # print(f'x.shape raw: {x.shape}')
-                        # print(f'n_id.shape: {n_id.shape}.shape')
-                        # print(f'n_id: {n_id}')
+
                     x = self.pre_gat_layers[net_idx](x)
-                    # print(f'x after pre gat: {x}')
-                    # print(f'x.shape after pre gat: {x.shape}')
 
                 if j != 0:
                     x_store_layer = [x_s[: size[1]] for x_s in x_store_layer]
                     x_pre = x[: size[1]]
                     x_store_layer.append(x_pre)
-                # print(f'x: {x}')
-                # print(f'x.shape: {x.shape}')
+
                 x = self.gat_layers[net_idx]((x, None), edge_index, size, edge_weights=weights)
-                # print(f'x after gat_layers: {x}')
-                # print(f'x.shape after gat_layers: {x.shape}')
                 x_store_layer.append(x)
 
             x = sum(x_store_layer) + x  # Compute tensor with residuals
             x = scales[:, i] * interp_masks[:, i].reshape((-1, 1)) * x
             x_store_modality += x
-            
 
         # Embedding
         emb = self.emb(x_store_modality)
-        # means = x_store_modality.mean(dim=1, keepdim=True)
-        # stds = x_store_modality.std(dim=1, keepdim=True)
-        # emb_normalized = (x_store_modality - means) / stds
-        # emb_normalized = StandardScaler().fit_transform(x_store_modality.detach().numpy())
-        # emb_normalized = self.bn1(x_store_modality)
-        # emb_normalized = self.emb(torch.from_numpy(emb_normalized))
-        # scaled_emb = StandardScaler().fit_transform(emb)
-        # emb_normalized = self.bn2(emb)
-        # emb_normalized = F.relu(self.fc(emb_normalized))
-        # emb_normalized = self.bn3(emb_normalized)
-        
-        output_prediction = F.relu(self.output_prediction(emb))
+
+        #CHANGE ADDED, add batch normalization layer, hidden fully connected layer and output layer
+        # out = self.bn2(emb)
+        with torch.no_grad():    
+            means = emb.mean(dim=0, keepdim=True)
+            stds = emb.std(dim=0, keepdim=True)
+            out = (emb - means) / stds
+            scaler = StandardScaler().fit(emb.detach().cpu().numpy())
+            features_scaled = scaler.transform(emb.detach().cpu().numpy())
+        last_layer_out = F.leaky_relu(self.fc(out))
+        out = self.output_prediction(last_layer_out)
+
         # Dot product.
         dot = torch.mm(emb, torch.t(emb))
 
-        return dot, emb, out_pre_cat_layers, scales, output_prediction
+        return dot, emb, out_pre_cat_layers, scales, out, last_layer_out

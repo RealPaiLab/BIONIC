@@ -5,10 +5,8 @@ from functools import reduce
 import typer
 import torch
 import numpy as np
-import pandas as pd
 import networkx as nx
 from sklearn.decomposition import TruncatedSVD
-from sklearn import preprocessing
 
 from .common import magenta, Device
 
@@ -55,6 +53,7 @@ class Preprocessor:
     def _get_union(self):
 
         union = reduce(np.union1d, [G.nodes() for G in self.graphs])
+        #CHANGE ADDED, check if this is numpy array, if not change it to numpy array
         if isinstance(union, np.ndarray):
             pass
         else:
@@ -67,15 +66,6 @@ class Preprocessor:
         masks = torch.t(masks)
         return masks
 
-    def _create_train_validation_masks(self):
-        indices = torch.randperm(len(self.union))
-        train_index, test_index = indices[:int(len(self.union)*0.8)], indices[int(len(self.union)*0.8):]
-        train_mask = torch.zeros(len(self.union)).bool()
-        train_mask[train_index] = True
-        test_mask = torch.zeros(len(self.union)).bool()
-        test_mask[test_index] = True
-        return train_mask, test_mask
-
     def _create_weights(self):
 
         # TODO in the future alternative network weighting schemes can be implemented here
@@ -83,6 +73,7 @@ class Preprocessor:
         return weights
 
     def _create_features(self):
+
         if bool(self.svd_dim):
 
             all_edges = [e for G in self.graphs for e in list(G.edges())]
@@ -109,26 +100,8 @@ class Preprocessor:
             i = torch.LongTensor([idx, idx])
             v = torch.FloatTensor(np.ones(len(self.union)))
             feat = torch.sparse.FloatTensor(i, v)
-        return feat
-       
-    def _create_labels(self):
 
-        pheno_data = pd.read_csv("/Users/jyu/Documents/DL_classifier/data/raw/pheno.txt", sep='\t', index_col='patientID', low_memory=False)
-        lst = []
-        for G in self.graphs:
-            labels = []
-            for n in G.nodes():
-                lst.append(n)
-                pat_name = n.replace('.','-')
-                label = pheno_data.loc[pat_name]['PAM50.mRNA']
-                if label == 'Normal-like' or pd.isna(label): 
-                    pheno_data = pheno_data.drop([pat_name])
-                else: 
-                    labels.append(label)
-            le = preprocessing.LabelEncoder()
-            le.fit(labels)
-            encoded_labels = torch.IntTensor(le.transform(labels)).type(torch.uint8)
-        return encoded_labels, le
+        return feat
 
     def _create_pyg_graphs(self):
 
@@ -151,6 +124,7 @@ class Preprocessor:
         to_sparse_tensor = ToSparseTensor(remove_edge_index=False)
         for G in pyg_graphs:
             to_sparse_tensor(G)
+
         return pyg_graphs
 
     def process(self):
@@ -163,19 +137,14 @@ class Preprocessor:
             Tensor: 2D node feature tensor. One-hot encoding or SVD union network approximation.
             List[SparseTensor]: Processed networks in Pytorch Geometric `SparseTensor` format.
         """
+
         masks: Tensor = self._create_masks()
-        train_mask, test_mask = self._create_train_validation_masks()
         weights: Tensor = self._create_weights()
         features: Tensor = self._create_features()
-        encoded_labels, label_encoder = self._create_labels()
         pyg_graphs: List[SparseTensor] = self._create_pyg_graphs()
 
         masks = masks.to(Device())
         weights = weights.to(Device())
-        if isinstance(encoded_labels, list):
-            features = [encoded_label.to(Device()) for encoded_label in encoded_labels]
-        else:
-            encoded_labels = encoded_labels.to(Device())
         if isinstance(features, list):
             features = [feature.to(Device()) for feature in features]
         else:
@@ -183,4 +152,5 @@ class Preprocessor:
         pyg_graphs = [t.to(Device()) for t in pyg_graphs]
 
         typer.echo(f"Preprocessing finished: {magenta(f'{len(self.union)}')} total nodes.")
-        return self.union, masks, train_mask, test_mask, weights, features, encoded_labels, label_encoder, pyg_graphs
+
+        return self.union, masks, weights, features, pyg_graphs
