@@ -2,16 +2,16 @@
   "names": [
     "bionic/inputs/mrna_similarity.txt"
   ],
-  "out_name": "bionic/outputs/fixed_patient_similarity_mrna_only_ce_loss_only",
+  "out_name": "bionic/outputs/patient_similarity_ce_loss_normalization",
   "epochs": 500,
-  "batch_size": 512,
-  "learning_rate": 0.0001,
+  "batch_size": 128,
+  "learning_rate": 0.000001,
   "gat_shapes": {
     "dimension": 64,
     "n_heads": 10,
     "n_layers": 2
   },
-  "embedding_size": 128,
+  "embedding_size": 512,
   "save_model": true,
   "save_network_scales": true
 }
