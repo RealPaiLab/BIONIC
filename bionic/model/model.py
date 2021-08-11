@@ -46,8 +46,6 @@ class Bionic(nn.Module):
         self.n_modalities = n_modalities
         self.svd_dim = svd_dim
         self.adj_dense_layers = []
-        self.pre_gat_layers = []
-        self.gat_layers = []
         self.post_gat_layers = []  # Dense transform after each GAT encoder.
 
         self.dimension: int = gat_shapes["dimension"]
@@ -55,26 +53,24 @@ class Bionic(nn.Module):
         self.n_layers: int = gat_shapes["n_layers"]
 
         # GAT
-        for i in range(self.n_modalities):
-            if bool(self.svd_dim):
-                self.pre_gat_layers.append(nn.Linear(self.svd_dim, self.dimension * self.n_heads))
-            else:
-                self.pre_gat_layers.append(nn.Linear(in_size, self.dimension * self.n_heads))
-            self.gat_layers.append(
-                WGATConv(
-                    self.dimension * self.n_heads,
-                    self.dimension,
-                    heads=self.n_heads,
-                    dropout=0,
-                    add_self_loops=False,
-                )
+        if bool(self.svd_dim):
+            self.pre_gat_layers = nn.Linear(self.svd_dim, self.dimension * self.n_heads)
+        else:
+            self.pre_gat_layers = nn.Linear(in_size, self.dimension * self.n_heads)
+        self.gat_layers = WGATConv(
+                self.dimension * self.n_heads,
+                self.dimension,
+                heads=self.n_heads,
+                dropout=0,
+                add_self_loops=False,
             )
+            
 
-        for g, gat_layer in enumerate(self.gat_layers):
-            self.add_module("GAT_{}".format(g), gat_layer)
+        # for g, gat_layer in enumerate(self.gat_layers):
+        self.add_module("GAT_{}".format(0), self.gat_layers)
 
-        for d, dense_layer in enumerate(self.pre_gat_layers):
-            self.add_module("Pre_GAT_Dense_{}".format(d), dense_layer)
+        # for d, dense_layer in enumerate(self.pre_gat_layers):
+        self.add_module("Pre_GAT_Dense_{}".format(0), self.pre_gat_layers)
 
         self.integration_size = self.dimension * self.n_heads
         self.interp = Interp(self.n_modalities)
@@ -155,14 +151,14 @@ class Bionic(nn.Module):
                         x = torch.zeros(len(n_id), self.in_size, device=Device())
                         x[np.arange(len(n_id)), n_id] = 1.0
 
-                    x = self.pre_gat_layers[net_idx](x)
+                    x = self.pre_gat_layers(x)
 
                 if j != 0:
                     x_store_layer = [x_s[: size[1]] for x_s in x_store_layer]
                     x_pre = x[: size[1]]
                     x_store_layer.append(x_pre)
 
-                x = self.gat_layers[net_idx]((x, None), edge_index, size, edge_weights=weights)
+                x = self.gat_layers((x, None), edge_index, size, edge_weights=weights)
                 x_store_layer.append(x)
 
             x = sum(x_store_layer) + x  # Compute tensor with residuals
