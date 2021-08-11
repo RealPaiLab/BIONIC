@@ -154,12 +154,12 @@ class Trainer:
                     rand_net_idxs, math.floor(len(self.adj) / self.params.sample_size)
                 )
                 for rand_idxs in idx_split:
-                    _, losses = self._train_step(rand_idxs)
+                    _, losses, learned_scales_df, train_emb_df, test_emb_df = self._train_step(rand_idxs)
                     for idx, loss in zip(rand_idxs, losses):
                         epoch_losses[idx] += loss
 
             else:
-                _, losses = self._train_step()
+                _, losses, learned_scales_df, train_emb_df, test_emb_df = self._train_step()
 
                 epoch_losses = [
                     ep_loss + b_loss.item() / (len(self.index) / self.params.batch_size)
@@ -191,7 +191,13 @@ class Trainer:
                     "best_loss": best_loss,
                 }
                 best_state = state
-                # torch.save(state, f'checkpoints/{self.params.out_name}_model.pt')
+                torch.save(state, f'{self.params.out_name}_model.pt')
+                learned_scales_df.to_csv(
+                    extend_path(self.params.out_name, "_network_weights.tsv"), header=False, sep="\t"
+                )
+                train_emb_df.to_csv(extend_path(self.params.out_name, "__train_features.tsv"), sep="\t", index_label='patients')
+                test_emb_df.to_csv(extend_path(self.params.out_name, "__test_features.tsv"), sep="\t", index_label='patients')
+                
 
         if self.params.use_tensorboard:
             self.writer.close()
@@ -227,7 +233,7 @@ class Trainer:
         losses = [0.0 for _ in range(len(batch_loaders))]
 
         # Get the data flow for each input, stored in a tuple.
-        pam_50 = pd.read_csv('/Users/jyu/Documents/jenny_bionic_new/BIONIC/bionic/inputs/patient_pam50.csv', index_col='patients') #CHANGE ADDED, add classification labels
+        pam_50 = pd.read_csv('/Users/jyu/Documents/jenny_bionic/BIONIC/bionic/inputs/patient_pam50.csv', index_col='patients') #CHANGE ADDED, add classification labels
         train_target_list = [] #CHANGE ADDED, init target list
         train_max_idx_class_list = [] #CHANGE ADDED, init prediction list
         train_max_scores_list = [] #CHANGE ADDED, init prediction score list
@@ -238,6 +244,7 @@ class Trainer:
         test_emb_list = []
         train_id_lst = []
         test_id_lst = []
+        learned_scales_lst = []
         for batch_masks, node_ids, *data_flows in zip(mask_splits, int_splits, *batch_loaders):
 
             train_num = int(len(node_ids) * 0.8)
@@ -248,8 +255,12 @@ class Trainer:
 
             self.optimizer.zero_grad()
             if bool(self.params.sample_size):
+                train_index = self.index[train_ids]
+                train_targets = pam_50.loc[train_index]['pam50'].to_list()
+                test_index = self.index[test_ids]
+                test_targets = pam_50.loc[test_index]['pam50'].to_list()
                 training_datasets = [self.adj[i] for i in rand_net_idx]
-                output, _, _, _ = self.model(
+                output_emb, embeddings, _, learned_scales, output, _ = self.model(
                     training_datasets,
                     data_flows,
                     batch_features,
@@ -258,7 +269,20 @@ class Trainer:
                 )
                 curr_losses = [
                     masked_scaled_mse(
-                        output, self.adj[i], self.weights[i], node_ids, batch_masks[:, j]
+                        output_emb, self.adj[i], self.weights[i], node_ids, batch_masks[:, j]
+                    )
+                    for j, i in enumerate(rand_net_idx)
+                ]
+                #CHANGE ADDED, calculate cross entropy loss
+                curr_ce_losses_train = [
+                    cross_entropy_loss(
+                          output[:train_num,], torch.tensor(train_targets).long().to(Device())
+                    )
+                    for j, i in enumerate(rand_net_idx)
+                ]
+                curr_ce_losses_test = [
+                    cross_entropy_loss(
+                          output[train_num:,], torch.tensor(test_targets).long().to(Device())
                     )
                     for j, i in enumerate(rand_net_idx)
                 ]
@@ -266,20 +290,13 @@ class Trainer:
             else:
                 #CHANGE ADDED, get training labels for each batch
                 train_index = self.index[train_ids]
-                train_targets = []
-                for id in train_index:
-                    target = pam_50.loc[id]['pam50']
-                    train_targets.append(target)
+                train_targets = pam_50.loc[train_index]['pam50'].to_list()
                 test_index = self.index[test_ids]
-                test_targets = []
-                for id in test_index:
-                    target = pam_50.loc[id]['pam50']
-                    test_targets.append(target)
-
+                test_targets = pam_50.loc[test_index]['pam50'].to_list()
                 training_datasets = self.adj
 
                 #CHANGE ADDED, output prediction values
-                output_emb, embeddings, _, _, output, _ = self.model(
+                output_emb, embeddings, _, learned_scales, output, _ = self.model(
                     training_datasets, data_flows, batch_features, batch_masks
                 )
                 curr_losses = [
@@ -308,14 +325,12 @@ class Trainer:
             losses_test = [loss + curr_ce_loss + curr_loss for loss, curr_ce_loss, curr_loss in zip(losses, curr_ce_losses_test, curr_losses)]
             loss_sum_test = sum(curr_ce_losses_test) + sum(curr_losses)
 
-            # losses = [loss + curr_loss for loss, curr_loss in zip(losses, curr_losses)]
-            # loss_sum = sum(curr_losses)
-
-            # losses = [loss + curr_loss + curr_ce_loss for loss, curr_loss, curr_ce_loss in zip(losses, curr_losses, curr_ce_losses)]
-            # loss_sum = sum(curr_losses) + sum(curr_ce_losses)
             loss_sum_train.backward()
 
             self.optimizer.step()
+
+            learned_scales_lst.append(learned_scales.detach().cpu().numpy())
+
 
             #CHANGE ADDED, try to calculate accuracy
             softmax = torch.nn.Softmax(dim=1)
@@ -331,17 +346,19 @@ class Trainer:
             train_emb_list.append(embeddings[:train_num,].detach().cpu().numpy())
 
             test_emb_list.append(embeddings[train_num:,].detach().cpu().numpy())
+        learned_scales_lst = np.concatenate(learned_scales_lst).sum(axis=0)
+        learned_scales_df = pd.DataFrame(
+            learned_scales_lst, index=self.params.names
+        )
         train_emb = np.concatenate(train_emb_list)
         train_id_lst = np.concatenate(train_id_lst)
         train_emb_df = pd.DataFrame(train_emb, index=self.index[train_id_lst])
-        train_emb_df.to_csv(extend_path(self.params.out_name, "__train_features.tsv"), sep="\t")
         test_emb = np.concatenate(test_emb_list)
         test_id_lst = np.concatenate(test_id_lst)
         test_emb_df = pd.DataFrame(test_emb, index=self.index[test_id_lst])
-        test_emb_df.to_csv(extend_path(self.params.out_name, "__test_features.tsv"), sep="\t")
         
         train_acc = (np.array(train_max_idx_class_list) == np.array(train_target_list)).astype(np.uint8).sum() / len(train_target_list)
-        return output, losses_train
+        return output, losses_train, learned_scales_df, train_emb_df, test_emb_df
 
     def _create_progress_string(
         self, epoch: int, epoch_losses: List[float], time_start: float
