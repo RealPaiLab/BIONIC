@@ -347,9 +347,18 @@ class Trainer:
 
             test_emb_list.append(embeddings[train_num:,].detach().cpu().numpy())
         learned_scales_lst = np.concatenate(learned_scales_lst).sum(axis=0)
-        learned_scales_df = pd.DataFrame(
-            learned_scales_lst, index=self.params.names
-        )
+        if bool(self.params.sample_size):
+            # print(rand_net_idx)
+            # print(type(self.params.names))
+            # print(len(self.params.names))
+            # print(list(np.array(self.params.names)[rand_net_idx]))
+            learned_scales_df = pd.DataFrame(
+                learned_scales_lst, index=list(np.array(self.params.names)[rand_net_idx])
+            )
+        else:
+            learned_scales_df = pd.DataFrame(
+                learned_scales_lst, index=self.params.names
+            )
         train_emb = np.concatenate(train_emb_list)
         train_id_lst = np.concatenate(train_id_lst)
         train_emb_df = pd.DataFrame(train_emb, index=self.index[train_id_lst])
