@@ -71,6 +71,11 @@ If you are installing a CUDA capable BIONIC wheel (i.e. not CPU), first ensure y
 
 8. Run `bionic path/to/your_config_file.json` for your task. If you see `Using CUDA`, it means your program is using GPU.
 
+### How to run Semi-supervised BIONIC
+
+1. Go to the virtual environment you created for BIONIC project
+2. Run `python -m bionic.run -config <config_file>` in `BIONIC/` folder. Example config files can be found under `bionic/config/*.json`.
+
 ### Common Installation Issues
 1. `ValueError: numpy.ndarray size changed, may indicate binary incompatibility. Expected 88 from C header, got 80 from PyObject`
 Solution: Make sure your numpy>=1.20.0
@@ -99,59 +104,6 @@ An overview of BIONIC can be seen below.
 2. Each network is passed through its own graph convolutional encoder where network-specific gene features are learned based the network topologies. These features are summed to produce integrated gene features which capture salient topological information across input networks. The integrated features can then be used for downstream tasks, such as gene-gene functional linkage prediction, module detection (clustering) and gene function prediction.
 3. In order to train and optimize the integrated gene features, BIONIC first decodes the integrated features into a reconstruction of the input networks.
 4. BIONIC then minimizes the difference between this reconstruction and the input networks (i.e. reconstruction error) by updating its weights to learn gene features that capture relevant topological information.
-
-## :gear: Installation
-- BIONIC is implemented in [Python 3.8](https://www.python.org/downloads/) and uses [PyTorch](https://pytorch.org/) and [PyTorch Geometric](https://github.com/rusty1s/pytorch_geometric).
-
-- BIONIC can run on the CPU or GPU. The CPU distribution will get you up and running quickly, but the GPU distributions are significantly faster for large models (when run on a GPU).
-
-- Currently, we provide wheels for CPU, CUDA 9.2, CUDA 10.1 and CUDA 10.2 on Linux, and CPU, CUDA 10.1 and CUDA 10.2 on Windows.
-
-**NOTE:** If you run into any problems with installation, please don't hesitate to open an [issue](https://github.com/bowang-lab/BIONIC/issues).
-
-### Preinstallation for CUDA capable BIONIC
-
-If you are installing a CUDA capable BIONIC wheel (i.e. not CPU), first ensure you have a CUDA capable GPU and the [drivers](https://www.nvidia.com/download/index.aspx?lang=en-us) for your GPU are up to date. Then, if you don't have CUDA installed and configured on your system already, [download](https://developer.nvidia.com/cuda-toolkit), install and configure a BIONIC compatible CUDA version. Nvidia provides detailed instructions on how to do this for both [Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html) and [Windows](https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html). 
-
-### Installing from wheel (recommended)
-
-1. Before installing BIONIC, it is recommended you create a virutal Python **3.8** environment using tools like the built in `venv` command, or [Anaconda](https://docs.anaconda.com/anaconda/user-guide/getting-started/).
-
-2. Make sure your virtual environment is active, then install BIONIC by running
-
-       $ pip install bionic_model==${VERSION}+${CUDA} -f https://bowang-lab.github.io/BIONIC/wheels.html
-
-    where `${VERSION}` is the version of BIONIC you want to install (currently `0.1.0`) and `${CUDA}` is one of `cpu`, `cu92`, `cu101`, `cu102`, corresponding to the        CPU, CUDA 9.2, CUDA 10.1 and CUDA 10.2 versions, respectively. Note, as above, that `cu92` is **not** available on Windows.
-
-3. Test BIONIC is installed properly by running
-
-       $ bionic --help
-       
-    You should see a help message. 
-
-### Installing using Poetry
-
-1. If you don't already have it, [install Poetry](https://python-poetry.org/docs/#installation).
-
-2. Create a virtual Python **3.8** environment using tools like the built in `venv` command, or [Anaconda](https://docs.anaconda.com/anaconda/user-guide/getting-started/). Make sure your virutal environment is active for the following steps.
-
-3. Install PyTorch **1.6.0** for your desired CUDA version [here](https://pytorch.org/get-started/locally/).
-
-4. Install PyTorch 1.6.0 compatible PyTorch Geometric dependencies for your desired CUDA version [here](https://github.com/rusty1s/pytorch_geometric#pytorch-160).
-
-5. Clone this repository by running
-
-       $ git clone https://github.com/bowang-lab/BIONIC.git
-
-6. Make sure you are in the BIONIC root directory and run
-
-       $ poetry install
-       
-7. Test BIONIC is installed properly by running
-
-       $ bionic --help
-       
-    You should see a help message.
 
 ## :zap: Usage
 
