@@ -1,3 +1,84 @@
+## :gear: BIONIC Installation
+- BIONIC is implemented in [Python 3.8](https://www.python.org/downloads/) and uses [PyTorch](https://pytorch.org/) and [PyTorch Geometric](https://github.com/rusty1s/pytorch_geometric).
+
+- BIONIC can run on the CPU or GPU. The CPU distribution will get you up and running quickly, but the GPU distributions are significantly faster for large models (when run on a GPU).
+
+- Currently, we provide wheels for CPU, CUDA 9.2, CUDA 10.1 and CUDA 10.2 on Linux, and CPU, CUDA 10.1 and CUDA 10.2 on Windows.
+
+**NOTE:** If you run into any problems with installation, please don't hesitate to open an [issue](https://github.com/bowang-lab/BIONIC/issues).
+
+### Preinstallation for CUDA capable BIONIC
+
+If you are installing a CUDA capable BIONIC wheel (i.e. not CPU), first ensure you have a CUDA capable GPU and the [drivers](https://www.nvidia.com/download/index.aspx?lang=en-us) for your GPU are up to date. Then, if you don't have CUDA installed and configured on your system already, [download](https://developer.nvidia.com/cuda-toolkit), install and configure a BIONIC compatible CUDA version. Nvidia provides detailed instructions on how to do this for both [Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html) and [Windows](https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html). 
+
+### Installing BIONIC wheel on Graham     
+3. Load necessary modules on Graham:
+
+        $ module load nixpkgs/16.09
+        $ module load gcc/7.3.0
+        $ module load llvm/7.0.0
+        $ module load python/3.8
+        $ module load scipy-stack/2019b
+
+4. Before installing BIONIC, it is recommended you create a virutal Python **3.8** environment using tools like the built in `virtualenv` command, or [Anaconda](https://docs.anaconda.com/anaconda/user-guide/getting-started/). To create a python virtual environment on Graham, please do `virtualenv --no-download ~/ENV`. Then do `source ~/ENV/bin/activate` to activate the environment.
+
+5. Make sure your virtual environment is active, then install BIONIC by running
+
+       $ pip install bionic_model==${VERSION}+${CUDA} -f https://bowang-lab.github.io/BIONIC/wheels.html
+
+    where `${VERSION}` is the version of BIONIC you want to install (currently `0.1.0`) and `${CUDA}` is one of `cpu`, `cu92`, `cu101`, `cu102`, corresponding to the        CPU, CUDA 9.2, CUDA 10.1 and CUDA 10.2 versions, respectively. Note, as above, that `cu92` is **not** available on Windows.
+
+6. If this doesn't work, download wheel from https://data.wanglab.ml/BIONIC/wheels/. And then pip install {WHEEL}.whl
+
+7. Test BIONIC is installed properly by running
+
+       $ bionic --help
+       
+    You should see a help message. 
+
+### Run BIONIC on GPU Graham
+
+1. First, unloads all the modules so we can load cuda.
+
+        $ module --force purge # unloads all the modules, this is important so we can then load cuda
+
+2. Create an interactive window for GPU job
+
+        $ salloc --account <account-name> --time <time-usage> --cpus-per-task=<num-cpus> --mem=<memory-usage> --gres=gpu:<num-gpus>
+
+    An example can be:
+
+        $ salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1
+
+3. Load necessary modules on Graham
+
+        $ module load nixpkgs/16.09
+        $ module load gcc/7.3.0
+        $ module load llvm/7.0.0
+        $ module load python/3.8
+        $ module load scipy-stack/2019b
+        $ module load cuda/10.2
+
+4. Specify cuda v10.2 path on Graham: 
+   
+        $ export LD_LIBRARY_PATH=/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/cudacore/10.2.89/lib64
+
+5. Activate Python virtual environmentsource by doing `source ~/ENV/bin/activate`
+
+6. Install required packages using `pip install -r requirements.txt`
+
+7. Run `bionic --help` to test BIONIC is installed
+
+8. Run `bionic path/to/your_config_file.json` for your task. If you see `Using CUDA`, it means your program is using GPU.
+
+### Common Installation Issues
+1. `ValueError: numpy.ndarray size changed, may indicate binary incompatibility. Expected 88 from C header, got 80 from PyObject`
+Solution: Make sure your numpy>=1.20.0
+Reference: https://stackoverflow.com/questions/66060487/valueerror-numpy-ndarray-size-changed-may-indicate-binary-incompatibility-exp 
+
+2. `ImportError: libgfortran.so.4: cannot open shared object file: No such file or directory`
+Solution: unload everything and make sure you follow the EXACT SAME order as the step 3 in Run BIONIC on GPU Graham section. If it's still not working, contact Compute Canada Technical Support team.
+
 ![Build status](https://img.shields.io/github/workflow/status/bowang-lab/BIONIC/Python%20package)
 ![Version](https://img.shields.io/github/v/release/bowang-lab/BIONIC)
 ![Top language](https://img.shields.io/github/languages/top/bowang-lab/BIONIC)
