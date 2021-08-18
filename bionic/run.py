@@ -4,8 +4,8 @@ import time
 from pathlib import Path
 from .train import Trainer
 from .utils.common import create_time_taken_string
-import sys
 from pathlib import Path
+import argparse
 
 
 
@@ -28,7 +28,14 @@ def train(config_path: Path):
 
 
 def main():
-    train(Path('/Users/jyu/Documents/jenny_bionic_new/BIONIC/bionic/config/patient_similarity.json'))
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-config', '--config_file', help='train features generated from BIONIC')
+
+    args = vars(parser.parse_args())
+
+    config_file = args['config_file']
+    train(Path(config_file))
 
 if __name__ == '__main__':
     main()

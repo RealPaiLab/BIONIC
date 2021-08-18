@@ -233,7 +233,7 @@ class Trainer:
         losses = [0.0 for _ in range(len(batch_loaders))]
 
         # Get the data flow for each input, stored in a tuple.
-        pam_50 = pd.read_csv('/Users/jyu/Documents/jenny_bionic/BIONIC/bionic/inputs/patient_pam50.csv', index_col='patients') #CHANGE ADDED, add classification labels
+        pam_50 = pd.read_csv('bionic/inputs/patient_pam50.csv', index_col='patients') #CHANGE ADDED, add classification labels
         train_target_list = [] #CHANGE ADDED, init target list
         train_max_idx_class_list = [] #CHANGE ADDED, init prediction list
         train_max_scores_list = [] #CHANGE ADDED, init prediction score list
@@ -329,10 +329,9 @@ class Trainer:
 
             self.optimizer.step()
 
+            #CHANGE ADDED, update train and test embeddings and features, and network coefficient
             learned_scales_lst.append(learned_scales.detach().cpu().numpy())
 
-
-            #CHANGE ADDED, try to calculate accuracy
             softmax = torch.nn.Softmax(dim=1)
             train_max_scores, train_max_idx_class = softmax(output[:train_num,]).max(dim=1)
             train_target_list.extend(train_targets)
@@ -346,12 +345,9 @@ class Trainer:
             train_emb_list.append(embeddings[:train_num,].detach().cpu().numpy())
 
             test_emb_list.append(embeddings[train_num:,].detach().cpu().numpy())
+        # CHANGE ADDED, update network coefficient
         learned_scales_lst = np.concatenate(learned_scales_lst).sum(axis=0)
         if bool(self.params.sample_size):
-            # print(rand_net_idx)
-            # print(type(self.params.names))
-            # print(len(self.params.names))
-            # print(list(np.array(self.params.names)[rand_net_idx]))
             learned_scales_df = pd.DataFrame(
                 learned_scales_lst, index=list(np.array(self.params.names)[rand_net_idx])
             )
