@@ -22,7 +22,7 @@ If you are installing a CUDA capable BIONIC wheel (i.e. not CPU), first ensure y
 
 4. Before installing BIONIC, it is recommended you create a virutal Python **3.8** environment using tools like the built in `virtualenv` command, or [Anaconda](https://docs.anaconda.com/anaconda/user-guide/getting-started/). To create a python virtual environment on Graham, please do `virtualenv --no-download ~/ENV`. Then do `source ~/ENV/bin/activate` to activate the environment.
 
-5. Make sure your virtual environment is active, then install BIONIC by running
+5. Make sure your virtual environment is active, then install BIONIC by running (make sure you are on graham login node)
 
        $ pip install bionic_model==${VERSION}+${CUDA} -f https://bowang-lab.github.io/BIONIC/wheels.html
 
@@ -75,6 +75,30 @@ If you are installing a CUDA capable BIONIC wheel (i.e. not CPU), first ensure y
 
 1. Go to the virtual environment you created for BIONIC project
 2. Run `python -m bionic.run -config <config_file>` in `BIONIC/` folder. Example config files can be found under `bionic/config/*.json`.
+
+### How to run Semi-supervised BIONIC on Graham
+1. Clone the repo by doing `git clone git@github.com:smilejennyyu/BIONIC.git`
+2. Create a bash script and put the following:
+```
+        #!/bin/bash
+        #SBATCH --gres=gpu:2              # Number of GPUs (per node)
+        #SBATCH --mem=10G               # memory (per node)
+        #SBATCH --time=00-30:00            # time (DD-HH:MM)
+        #SBATCH --account=def-spai
+        #SBATCH --cpus-per-task=6
+        module --force purge
+        module load nixpkgs/16.09
+        module load gcc/7.3.0
+        module load python/3.8
+        module load scipy-stack/2019b
+        module load cuda/10.2
+        export LD_LIBRARY_PATH=/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/cudacore/10.2.89/lib64
+        source ~/ENV/bin/activate
+        cd <directory where you clone the project>
+        time python -m bionic.run -config bionic/config/patient_similarity.json # This is the example json file, can be changed based on your task.
+```
+3. `sbatch <script_name>.sh`
+4. There should be a slurm.out file created that contains the output.
 
 ### Common Installation Issues
 1. `ValueError: numpy.ndarray size changed, may indicate binary incompatibility. Expected 88 from C header, got 80 from PyObject`
