@@ -12,7 +12,7 @@
 If you are installing a CUDA capable BIONIC wheel (i.e. not CPU), first ensure you have a CUDA capable GPU and the [drivers](https://www.nvidia.com/download/index.aspx?lang=en-us) for your GPU are up to date. Then, if you don't have CUDA installed and configured on your system already, [download](https://developer.nvidia.com/cuda-toolkit), install and configure a BIONIC compatible CUDA version. Nvidia provides detailed instructions on how to do this for both [Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html) and [Windows](https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html). 
 
 ### Installing BIONIC wheel on Graham     
-3. Load necessary modules on Graham:
+1. Load necessary modules on Graham:
 
 ```
 module load nixpkgs/16.09
@@ -22,17 +22,17 @@ module load python/3.8
 module load scipy-stack/2019b
 ```
 
-4. Before installing BIONIC, it is recommended you create a virutal Python **3.8** environment using tools like the built in `virtualenv` command, or [Anaconda](https://docs.anaconda.com/anaconda/user-guide/getting-started/). To create a python virtual environment on Graham, please do `virtualenv --no-download ~/ENV`. Then do `source ~/ENV/bin/activate` to activate the environment.
+2. Before installing BIONIC, it is recommended you create a virutal Python **3.8** environment using tools like the built in `virtualenv` command, or [Anaconda](https://docs.anaconda.com/anaconda/user-guide/getting-started/). To create a python virtual environment on Graham, please do `virtualenv --no-download ~/ENV`. Then do `source ~/ENV/bin/activate` to activate the environment.
 
-5. Make sure your virtual environment is active, then install BIONIC by running (make sure you are on graham login node)
+3. Make sure your virtual environment is active, then install BIONIC by running (make sure you are on graham login node)
 
 `pip install bionic_model==${VERSION}+${CUDA} -f https://bowang-lab.github.io/BIONIC/wheels.html`
 
 where `${VERSION}` is the version of BIONIC you want to install (currently `0.1.0`) and `${CUDA}` is one of `cpu`, `cu92`, `cu101`, `cu102`, corresponding to the        CPU, CUDA 9.2, CUDA 10.1 and CUDA 10.2 versions, respectively. Note, as above, that `cu92` is **not** available on Windows.
 
-6. If this doesn't work, download wheel from https://data.wanglab.ml/BIONIC/wheels/. And then pip install {WHEEL}.whl
+4. If this doesn't work, download wheel from https://data.wanglab.ml/BIONIC/wheels/. And then pip install {WHEEL}.whl
 
-7. Test BIONIC is installed properly by running `bionic --help`. You should see a help message. 
+5. Test BIONIC is installed properly by running `bionic --help`. You should see a help message. 
 
 ### Run BIONIC on GPU Graham
 
