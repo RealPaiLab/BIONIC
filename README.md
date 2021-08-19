@@ -71,7 +71,7 @@ If you are installing a CUDA capable BIONIC wheel (i.e. not CPU), first ensure y
 
 8. Run `bionic path/to/your_config_file.json` for your task. If you see `Using CUDA`, it means your program is using GPU.
 
-### How to run Semi-supervised BIONIC
+### How to run Semi-supervised BIONIC on your local machine
 
 1. Go to the virtual environment you created for BIONIC project
 2. Run `python -m bionic.run -config <config_file>` in `BIONIC/` folder. Example config files can be found under `bionic/config/*.json`.
@@ -124,6 +124,8 @@ If you are installing a CUDA capable BIONIC wheel (i.e. not CPU), first ensure y
         $ export LD_LIBRARY_PATH=/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/cudacore/10.2.89/lib64
 
 5. Activate Python virtual environmentsource by doing `source /project/6059997/BIONIC_ENV/bin/activate`
+6. Run `python -m bionic.run -config <path_to_your_config_file.json>` for your task. If you see `Using CUDA`, it means your program is using GPU.
+
 
 ### Common Installation Issues
 1. `ValueError: numpy.ndarray size changed, may indicate binary incompatibility. Expected 88 from C header, got 80 from PyObject`
