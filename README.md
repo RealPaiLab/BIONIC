@@ -76,7 +76,7 @@ If you are installing a CUDA capable BIONIC wheel (i.e. not CPU), first ensure y
 1. Go to the virtual environment you created for BIONIC project
 2. Run `python -m bionic.run -config <config_file>` in `BIONIC/` folder. Example config files can be found under `bionic/config/*.json`.
 
-### How to run Semi-supervised BIONIC on Graham
+### How to run Semi-supervised BIONIC on Graham - Slurm
 1. Clone the repo by doing `git clone git@github.com:smilejennyyu/BIONIC.git`
 2. Create a bash script and put the following:
 ```
@@ -94,11 +94,36 @@ If you are installing a CUDA capable BIONIC wheel (i.e. not CPU), first ensure y
         module load cuda/10.2
         export LD_LIBRARY_PATH=/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/cudacore/10.2.89/lib64
         source ~/ENV/bin/activate
-        cd <directory where you clone the project>
+        cd <directory where the BIONIC/ is>
         time python -m bionic.run -config bionic/config/patient_similarity.json # This is the example json file, can be changed based on your task.
 ```
 3. `sbatch <script_name>.sh`
 4. There should be a slurm.out file created that contains the output.
+
+### How to run Semi-supervised BIONIC on Graham - Interactive Window
+1. Clone the repo by doing `git clone git@github.com:smilejennyyu/BIONIC.git`
+2. Create an interactive window for GPU job
+
+        $ salloc --account <account-name> --time <time-usage> --cpus-per-task=<num-cpus> --mem=<memory-usage> --gres=gpu:<num-gpus>
+
+    An example can be:
+
+        $ salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1
+
+3. Load necessary modules on Graham
+
+        $ module load nixpkgs/16.09
+        $ module load gcc/7.3.0
+        $ module load llvm/7.0.0
+        $ module load python/3.8
+        $ module load scipy-stack/2019b
+        $ module load cuda/10.2
+
+4. Specify cuda v10.2 path on Graham: 
+   
+        $ export LD_LIBRARY_PATH=/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/cudacore/10.2.89/lib64
+
+5. Activate Python virtual environmentsource by doing `source /project/6059997/BIONIC_ENV/bin/activate`
 
 ### Common Installation Issues
 1. `ValueError: numpy.ndarray size changed, may indicate binary incompatibility. Expected 88 from C header, got 80 from PyObject`
