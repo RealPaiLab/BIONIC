@@ -44,7 +44,7 @@ where `${VERSION}` is the version of BIONIC you want to install (currently `0.1.
 
 ```salloc --account <account-name> --time <time-usage> --cpus-per-task=<num-cpus> --mem=<memory-usage> --gres=gpu:<num-gpus>```
 
-    An example can be: `salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1`
+An example can be: `salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1`
 
 3. Load necessary modules on Graham
 
@@ -106,7 +106,7 @@ time python -m bionic.run -config bionic/config/patient_similarity.json # This i
 
 ```salloc --account <account-name> --time <time-usage> --cpus-per-task=<num-cpus> --mem=<memory-usage> --gres=gpu:<num-gpus>```
 
-    An example can be: `salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1`
+An example can be: `salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1`
 
 3. Load necessary modules on Graham
 
