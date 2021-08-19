@@ -26,17 +26,13 @@ module load scipy-stack/2019b
 
 5. Make sure your virtual environment is active, then install BIONIC by running (make sure you are on graham login node)
 
-```pip install bionic_model==${VERSION}+${CUDA} -f https://bowang-lab.github.io/BIONIC/wheels.html```
+`pip install bionic_model==${VERSION}+${CUDA} -f https://bowang-lab.github.io/BIONIC/wheels.html`
 
-    where `${VERSION}` is the version of BIONIC you want to install (currently `0.1.0`) and `${CUDA}` is one of `cpu`, `cu92`, `cu101`, `cu102`, corresponding to the        CPU, CUDA 9.2, CUDA 10.1 and CUDA 10.2 versions, respectively. Note, as above, that `cu92` is **not** available on Windows.
+where `${VERSION}` is the version of BIONIC you want to install (currently `0.1.0`) and `${CUDA}` is one of `cpu`, `cu92`, `cu101`, `cu102`, corresponding to the        CPU, CUDA 9.2, CUDA 10.1 and CUDA 10.2 versions, respectively. Note, as above, that `cu92` is **not** available on Windows.
 
 6. If this doesn't work, download wheel from https://data.wanglab.ml/BIONIC/wheels/. And then pip install {WHEEL}.whl
 
-7. Test BIONIC is installed properly by running
-
-```bionic --help```
-       
-    You should see a help message. 
+7. Test BIONIC is installed properly by running `bionic --help`. You should see a help message. 
 
 ### Run BIONIC on GPU Graham
 
@@ -48,9 +44,7 @@ module load scipy-stack/2019b
 
 ```salloc --account <account-name> --time <time-usage> --cpus-per-task=<num-cpus> --mem=<memory-usage> --gres=gpu:<num-gpus>```
 
-    An example can be:
-
-```salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1```
+    An example can be: `salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1`
 
 3. Load necessary modules on Graham
 
@@ -112,9 +106,7 @@ time python -m bionic.run -config bionic/config/patient_similarity.json # This i
 
 ```salloc --account <account-name> --time <time-usage> --cpus-per-task=<num-cpus> --mem=<memory-usage> --gres=gpu:<num-gpus>```
 
-    An example can be:
-
-```salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1```
+    An example can be: `salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1`
 
 3. Load necessary modules on Graham
 
