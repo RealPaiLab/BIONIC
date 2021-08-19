@@ -61,7 +61,7 @@ module load cuda/10.2
    
 ```export LD_LIBRARY_PATH=/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/cudacore/10.2.89/lib64```
 
-5. Activate Python virtual environmentsource by doing `source ~/ENV/bin/activate`
+5. Activate Python virtual environmentsource by doing `source /project/6059997/BIONIC_ENV/bin/activate`
 
 6. Install required packages using `pip install -r requirements.txt`
 
@@ -92,7 +92,7 @@ module load python/3.8
 module load scipy-stack/2019b
 module load cuda/10.2
 export LD_LIBRARY_PATH=/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/cudacore/10.2.89/lib64
-source ~/ENV/bin/activate
+source /project/6059997/BIONIC_ENV/bin/activate
 cd <directory where the BIONIC/ is>
 time python -m bionic.run -config bionic/config/patient_similarity.json # This is the example json file, can be changed based on your task.
 ```
