@@ -69,6 +69,7 @@ module load cuda/10.2
 
 8. Run `bionic path/to/your_config_file.json` for your task. If you see `Using CUDA`, it means your program is using GPU.
 
+
 ### How to run Semi-supervised BIONIC on your local machine
 
 1. Go to the virtual environment you created for BIONIC project
@@ -99,6 +100,8 @@ time python -m bionic.run -config bionic/config/patient_similarity.json # This i
 
 3. Run `sbatch <script_name>.sh`
 4. There should be a slurm.out file created that contains the output.
+5. Once the script finishes, feature files will be under `bionic/output/ ` folder. This will be used in post-BIONIC classification script. Please see https://github.com/RealPaiLab/DL_classifier for post-BIONIC scirpt. To run post-BIONIC classification script, please clone `DL_classifier` repo and use `svm_classification.py` or `mlp_classification.py` under `DL_classifier`.
+
 
 ### How to run Semi-supervised BIONIC on Graham - Interactive Window
 1. Clone the repo by doing `git clone git@github.com:smilejennyyu/BIONIC.git`
@@ -125,6 +128,7 @@ module load cuda/10.2
 
 5. Activate Python virtual environmentsource by doing `source /project/6059997/BIONIC_ENV/bin/activate`
 6. Run `python -m bionic.run -config <path_to_your_config_file.json>` for your task. If you see `Using CUDA`, it means your program is using GPU.
+7. Feature files will be under `bionic/output/ ` folder. This will be used in post-BIONIC classification script. Please see https://github.com/RealPaiLab/DL_classifier for post-BIONIC scirpt. To run post-BIONIC classification script, please clone `DL_classifier` repo and use `svm_classification.py` or `mlp_classification.py` under `DL_classifier`.
 
 
 ### Common Installation Issues
