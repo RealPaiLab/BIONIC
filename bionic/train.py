@@ -422,12 +422,16 @@ class Trainer:
                 emb_list.append(emb.detach().cpu().numpy())
                 last_layer_emb_list.append(last_layer_emb.detach().cpu().numpy())
         emb = np.concatenate(emb_list)
+        train_emb = emb[:int(len(self.index)*0.8),:]
+        test_emb = emb[int(len(self.index)*0.8):,:]
         emb_df = pd.DataFrame(emb, index=self.index)
-        emb_df.to_csv(extend_path(self.params.out_name, "_features.tsv"), sep="\t")
+        train_emb_df = pd.DataFrame(train_emb, index=self.index[:int(len(self.index)*0.8)])
+        test_emb_df = pd.DataFrame(test_emb, index=self.index[int(len(self.index)*0.8):])
+        train_emb_df.to_csv(extend_path(self.params.out_name, "_train__features.tsv"), sep="\t")
+        test_emb_df.to_csv(extend_path(self.params.out_name, "_test__features.tsv"), sep="\t")
         last_layer_emb = np.concatenate(last_layer_emb_list)
         last_layer_emb_df = pd.DataFrame(last_layer_emb, index=self.index)
         last_layer_emb_df.to_csv(extend_path(self.params.out_name, "_last_layer_features.tsv"), sep="\t")
-        # emb_df.to_csv(extend_path(self.params.out_name, "_features.csv"))
 
         # Free memory (necessary for sequential runs)
         if Device() == "cuda":
