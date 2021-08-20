@@ -144,6 +144,9 @@ Solution: unload everything and make sure you follow the EXACT SAME order as the
 ![Top language](https://img.shields.io/github/languages/top/bowang-lab/BIONIC)
 ![License](https://img.shields.io/github/license/bowang-lab/BIONIC)
 
+### Difference from the Original BIONIC
+If you are curious about the changes we made, please search `CHANGE ADDED` in our BIONIC repo! Those comments with `CHANGE ADDED` are where we changed.
+
 **Check out the [preprint](https://www.biorxiv.org/content/10.1101/2021.03.15.435515v1)!**
 
 ## :boom: Introduction
