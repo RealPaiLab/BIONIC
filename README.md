@@ -7,63 +7,61 @@
 
 **NOTE:** If you run into any problems with installation, please don't hesitate to open an [issue](https://github.com/bowang-lab/BIONIC/issues).
 
-### Preinstallation for CUDA capable BIONIC
+### Pre-installation for CUDA capable BIONIC
 
 If you are installing a CUDA capable BIONIC wheel (i.e. not CPU), first ensure you have a CUDA capable GPU and the [drivers](https://www.nvidia.com/download/index.aspx?lang=en-us) for your GPU are up to date. Then, if you don't have CUDA installed and configured on your system already, [download](https://developer.nvidia.com/cuda-toolkit), install and configure a BIONIC compatible CUDA version. Nvidia provides detailed instructions on how to do this for both [Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html) and [Windows](https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html). 
 
 ### Installing BIONIC wheel on Graham     
-3. Load necessary modules on Graham:
+1. Load necessary modules on Graham:
 
-        $ module load nixpkgs/16.09
-        $ module load gcc/7.3.0
-        $ module load llvm/7.0.0
-        $ module load python/3.8
-        $ module load scipy-stack/2019b
+```
+module load nixpkgs/16.09
+module load gcc/7.3.0
+module load llvm/7.0.0
+module load python/3.8
+module load scipy-stack/2019b
+```
 
-4. Before installing BIONIC, it is recommended you create a virutal Python **3.8** environment using tools like the built in `virtualenv` command, or [Anaconda](https://docs.anaconda.com/anaconda/user-guide/getting-started/). To create a python virtual environment on Graham, please do `virtualenv --no-download ~/ENV`. Then do `source ~/ENV/bin/activate` to activate the environment.
+2. Before installing BIONIC, it is recommended you create a virutal Python **3.8** environment using tools like the built in `virtualenv` command, or [Anaconda](https://docs.anaconda.com/anaconda/user-guide/getting-started/). To create a python virtual environment on Graham, please do `virtualenv --no-download ~/ENV`. Then do `source ~/ENV/bin/activate` to activate the environment.
 
-5. Make sure your virtual environment is active, then install BIONIC by running
+3. Make sure your virtual environment is active, then install BIONIC by running (make sure you are on graham login node)
 
-       $ pip install bionic_model==${VERSION}+${CUDA} -f https://bowang-lab.github.io/BIONIC/wheels.html
+`pip install bionic_model==${VERSION}+${CUDA} -f https://bowang-lab.github.io/BIONIC/wheels.html`
 
-    where `${VERSION}` is the version of BIONIC you want to install (currently `0.1.0`) and `${CUDA}` is one of `cpu`, `cu92`, `cu101`, `cu102`, corresponding to the        CPU, CUDA 9.2, CUDA 10.1 and CUDA 10.2 versions, respectively. Note, as above, that `cu92` is **not** available on Windows.
+where `${VERSION}` is the version of BIONIC you want to install (currently `0.1.0`) and `${CUDA}` is one of `cpu`, `cu92`, `cu101`, `cu102`, corresponding to the        CPU, CUDA 9.2, CUDA 10.1 and CUDA 10.2 versions, respectively. Note, as above, that `cu92` is **not** available on Windows.
 
-6. If this doesn't work, download wheel from https://data.wanglab.ml/BIONIC/wheels/. And then pip install {WHEEL}.whl
+4. If this doesn't work, download wheel from https://data.wanglab.ml/BIONIC/wheels/. And then pip install {WHEEL}.whl
 
-7. Test BIONIC is installed properly by running
-
-       $ bionic --help
-       
-    You should see a help message. 
+5. Test BIONIC is installed properly by running `bionic --help`. You should see a help message. 
 
 ### Run BIONIC on GPU Graham
 
 1. First, unloads all the modules so we can load cuda.
 
-        $ module --force purge # unloads all the modules, this is important so we can then load cuda
+```module --force purge # unloads all the modules, this is important so we can then load cuda```
 
 2. Create an interactive window for GPU job
 
-        $ salloc --account <account-name> --time <time-usage> --cpus-per-task=<num-cpus> --mem=<memory-usage> --gres=gpu:<num-gpus>
+```salloc --account <account-name> --time <time-usage> --cpus-per-task=<num-cpus> --mem=<memory-usage> --gres=gpu:<num-gpus>```
 
-    An example can be:
-
-        $ salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1
+An example can be: `salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1`
 
 3. Load necessary modules on Graham
 
-        $ module load nixpkgs/16.09
-        $ module load gcc/7.3.0
-        $ module load llvm/7.0.0
-        $ module load python/3.8
-        $ module load scipy-stack/2019b
-        $ module load cuda/10.2
+```
+module load nixpkgs/16.09
+module load gcc/7.3.0
+module load llvm/7.0.0
+module load python/3.8
+module load scipy-stack/2019b
+module load cuda/10.2
+```
 
 4. Specify cuda v10.2 path on Graham: 
    
-        $ export LD_LIBRARY_PATH=/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/cudacore/10.2.89/lib64
+```export LD_LIBRARY_PATH=/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/cudacore/10.2.89/lib64```
 
-5. Activate Python virtual environmentsource by doing `source ~/ENV/bin/activate`
+5. Activate Python virtual environmentsource by doing `source /project/6059997/BIONIC_ENV/bin/activate`
 
 6. Install required packages using `pip install -r requirements.txt`
 
@@ -71,10 +69,63 @@ If you are installing a CUDA capable BIONIC wheel (i.e. not CPU), first ensure y
 
 8. Run `bionic path/to/your_config_file.json` for your task. If you see `Using CUDA`, it means your program is using GPU.
 
-### How to run Semi-supervised BIONIC
+### How to run Semi-supervised BIONIC on your local machine
 
 1. Go to the virtual environment you created for BIONIC project
 2. Run `python -m bionic.run -config <config_file>` in `BIONIC/` folder. Example config files can be found under `bionic/config/*.json`.
+
+### How to run Semi-supervised BIONIC on Graham - Slurm
+1. Clone the repo by doing `git clone git@github.com:smilejennyyu/BIONIC.git`
+2. Create a bash script and put the following:
+
+```
+#!/bin/bash
+#SBATCH --gres=gpu:2              # Number of GPUs (per node)
+#SBATCH --mem=10G               # memory (per node)
+#SBATCH --time=00-30:00            # time (DD-HH:MM)
+#SBATCH --account=def-spai
+#SBATCH --cpus-per-task=6
+module --force purge
+module load nixpkgs/16.09
+module load gcc/7.3.0
+module load python/3.8
+module load scipy-stack/2019b
+module load cuda/10.2
+export LD_LIBRARY_PATH=/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/cudacore/10.2.89/lib64
+source /project/6059997/BIONIC_ENV/bin/activate
+cd <directory where the BIONIC/ is>
+time python -m bionic.run -config bionic/config/patient_similarity.json # This is the example json file, can be changed based on your task.
+```
+
+3. Run `sbatch <script_name>.sh`
+4. There should be a slurm.out file created that contains the output.
+
+### How to run Semi-supervised BIONIC on Graham - Interactive Window
+1. Clone the repo by doing `git clone git@github.com:smilejennyyu/BIONIC.git`
+2. Create an interactive window for GPU job
+
+```salloc --account <account-name> --time <time-usage> --cpus-per-task=<num-cpus> --mem=<memory-usage> --gres=gpu:<num-gpus>```
+
+An example can be: `salloc --account def-spai --time 00:30:00 --cpus-per-task=1 --mem=5G --gres=gpu:1`
+
+3. Load necessary modules on Graham
+
+```
+module load nixpkgs/16.09
+module load gcc/7.3.0
+module load llvm/7.0.0
+module load python/3.8
+module load scipy-stack/2019b
+module load cuda/10.2
+```
+
+4. Specify cuda v10.2 path on Graham: 
+   
+```export LD_LIBRARY_PATH=/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/cudacore/10.2.89/lib64```
+
+5. Activate Python virtual environmentsource by doing `source /project/6059997/BIONIC_ENV/bin/activate`
+6. Run `python -m bionic.run -config <path_to_your_config_file.json>` for your task. If you see `Using CUDA`, it means your program is using GPU.
+
 
 ### Common Installation Issues
 1. `ValueError: numpy.ndarray size changed, may indicate binary incompatibility. Expected 88 from C header, got 80 from PyObject`
